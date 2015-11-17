@@ -24,6 +24,13 @@ type call struct {
 // original function is. Panics are handled, so calling panic from a function
 // will call panic with the same value on future invocations with the same
 // arguments.
+//
+// The arguments to the function must be of comparable types. Slices, maps,
+// functions, and structs or arrays that contain slices, maps, or functions
+// cause a runtime panic if they are arguments to a memoized function.
+// See also: https://golang.org/ref/spec#Comparison_operators
+//
+// As a special case, variadic functions (func(x, y, ...z)) are allowed.
 func Memoize(fn interface{}) interface{} {
 	v := reflect.ValueOf(fn)
 	t := v.Type()
@@ -35,6 +42,13 @@ func Memoize(fn interface{}) interface{} {
 	return reflect.MakeFunc(t, func(args []reflect.Value) (results []reflect.Value) {
 		key := reflect.New(keyType).Elem()
 		for i, v := range args {
+			if i == len(args)-1 && t.IsVariadic() {
+				a := reflect.New(reflect.ArrayOf(v.Len(), v.Type().Elem())).Elem()
+				for j, l := 0, v.Len(); j < l; j++ {
+					a.Index(j).Set(v.Index(j))
+				}
+				v = a
+			}
 			vi := v.Interface()
 			key.Index(i).Set(reflect.ValueOf(&vi).Elem())
 		}
